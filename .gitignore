@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+*.log
+
+# Rider
+.idea/
+
+# Visual Studio
+.vs/
+*.csproj.user
+
+# User-specific data (IMPORTANT: Contains user timers and configs)
+Data/
+
+# Environment variables (CRITICAL: Contains Twitch credentials)
+.env
+appsettings.Development.json
+appsettings.Production.json
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+services:
+  twitch-timer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+      - "7283:8080"
+    volumes:
+      - ./data:/app/Data
+    env_file:
+      - .env
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - DataDirectory=Data
+    restart: unless-stopped

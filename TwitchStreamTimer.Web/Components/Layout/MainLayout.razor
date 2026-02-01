@@ -1,0 +1,34 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_myTheme" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary">
+        <MudText Typo="Typo.h5" Class="ml-3">Twitch Stream Timer</MudText>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.Tv" Color="Color.Inherit" Href="/overlay" Target="_blank" Title="Open Overlay" />
+    </MudAppBar>
+
+@code {
+    MudTheme _myTheme = new MudTheme()
+    {
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#9146FF", // Twitch Purple
+            Secondary = "#f0f0ff",
+            AppbarBackground = "#9146FF",
+            Background = "#0e0e10", // Twitch Dark BG
+            Surface = "#18181b", // Twitch Card BG
+            TextPrimary = "#efeff1"
+        }
+    };
+}
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.Large" Class="my-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>

@@ -1,0 +1,82 @@
+@page "/overlay"
+@page "/overlay/{UserId}"
+@layout EmptyLayout
+@inject ITimerManager TimerManager
+@inject IUserContext UserContext
+@inject NavigationManager Navigation
+@implements IDisposable
+
+<style>
+    body, html { background-color: transparent !important; overflow: hidden; }
+    .timer-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        width: 100vw;
+    }
+    .timer-text {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-size: 15vw; /* Responsive huge text */
+        font-weight: bold;
+        color: @_textColor;
+        text-shadow: 2px 2px 4px #000000;
+    }
+</style>
+
+<div class="timer-container" style="background-color: @_backgroundColor;">
+    <div class="timer-text">
+        @_timeString
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? UserId { get; set; }
+    
+    private string _timeString = "--:--:--";
+    private System.Timers.Timer _timer;
+    private ITimerService? _timerService;
+    private string _backgroundColor = "transparent";
+    private string _textColor = "#00e676";
+
+    protected override void OnInitialized()
+    {
+        // Determine which user's timer to show
+        var targetUserId = UserId ?? UserContext.GetCurrentUserId();
+        
+        if (string.IsNullOrEmpty(targetUserId))
+        {
+            _timeString = "LOGIN REQUIRED";
+            return;
+        }
+        
+        _timerService = TimerManager.GetUserTimer(targetUserId);
+        
+        // Load user's custom colors
+        _backgroundColor = _timerService.Config.BackgroundColor;
+        _textColor = _timerService.Config.TextColor;
+        
+        _timer = new System.Timers.Timer(100); // Faster update for smooth seconds
+        _timer.Elapsed += (s, e) => InvokeAsync(UpdateTimer);
+        _timer.Start();
+    }
+
+    private void UpdateTimer()
+    {
+        if (_timerService == null) return;
+        
+        var ts = _timerService.RemainingTime;
+        int totalHours = (int)ts.TotalHours;
+        int minutes = ts.Minutes;
+        int seconds = ts.Seconds;
+        _timeString = $"{totalHours:D2}:{minutes:D2}:{seconds:D2}";
+        
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}
