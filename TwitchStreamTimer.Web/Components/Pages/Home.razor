@@ -276,13 +276,6 @@ else
             _backgroundColor = new MudBlazor.Utilities.MudColor(_config.BackgroundColor);
             _textColor = new MudBlazor.Utilities.MudColor(_config.TextColor);
 
-            if (string.IsNullOrEmpty(_config.TwitchClientId))
-            {
-                _config.TwitchClientId = "z4ycjrjp32senge5z178bb1gl45czj";
-                _config.TwitchClientSecret = "c9ti8qwdn4ydjqi4tcwrnaxbdqa2xk";
-                _config.TwitchRedirectUri = "http://localhost:7283/auth/callback";
-            }
-
             _uiTimer = new System.Timers.Timer(1000);
             _uiTimer.Elapsed += (s, e) => InvokeAsync(RefreshUI);
             _uiTimer.Start();

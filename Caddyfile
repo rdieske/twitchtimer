@@ -1,3 +1,9 @@
 twitchtimer.enchanty.de {
+    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+    reverse_proxy twitch-timer:8080
+}
+
+localhost {
+    tls internal
     reverse_proxy twitch-timer:8080
 }
