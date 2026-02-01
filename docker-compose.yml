@@ -3,9 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
-      - "7283:8080"
+    expose:
+      - "8080"
     volumes:
       - ./data:/app/Data
     env_file:
@@ -14,3 +13,26 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - DataDirectory=Data
     restart: unless-stopped
+    networks:
+      - web
+
+  caddy:
+    image: caddy:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - web
+
+networks:
+  web:
+
+
+volumes:
+  caddy_data:
+  caddy_config:

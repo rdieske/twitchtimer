@@ -63,6 +63,17 @@ cd TwitchStreamTimer.Web
 dotnet run
 ```
 
+## HTTPS Setup
+
+For production deployment with HTTPS, see [HTTPS_SETUP.md](HTTPS_SETUP.md).
+
+**Quick Start with Caddy:**
+1. Edit `Caddyfile` and replace `your-domain.com` with your actual domain
+2. Update `TWITCH_REDIRECT_URI` in `.env` to use `https://`
+3. Run `docker compose up -d`
+
+Caddy will automatically obtain and renew SSL certificates from Let's Encrypt.
+
 ## Security Notes
 
 - **Never commit `.env` file** - Contains sensitive Twitch credentials

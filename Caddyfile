@@ -1,0 +1,3 @@
+twitchtimer.enchanty.de {
+    reverse_proxy twitch-timer:8080
+}

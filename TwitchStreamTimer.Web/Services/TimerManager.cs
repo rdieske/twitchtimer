@@ -28,7 +28,6 @@ public class TimerManager : ITimerManager
             var logger = _loggerFactory.CreateLogger<TimerService>();
             var timerService = new TimerService(uid, logger);
             
-            // Start the background service manually
             _ = timerService.StartAsync(CancellationToken.None);
             
             return timerService;
