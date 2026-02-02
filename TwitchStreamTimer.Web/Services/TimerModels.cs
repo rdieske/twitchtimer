@@ -5,6 +5,7 @@ namespace TwitchStreamTimer.Web.Services;
 public class TimerConfig
 {
     public DateTimeOffset StartTime { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset InitialStartTime { get; set; } = DateTimeOffset.UtcNow;
     public long MinDurationSeconds { get; set; } = 86400; // Default 24 hours
     public long MaxDurationSeconds { get; set; } = 7776000; // Default 60 days(optional cap)
     

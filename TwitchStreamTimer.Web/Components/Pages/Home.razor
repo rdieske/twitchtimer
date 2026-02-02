@@ -178,24 +178,6 @@ else
                          </MudGrid>
                      </MudItem>
 
-                     <MudItem xs="12"><MudDivider Class="my-4"/></MudItem>
-
-                     <MudItem xs="12">
-                         <MudText Typo="Typo.h6">Twitch API Settings</MudText>
-                         <MudGrid>
-                             <MudItem xs="12" md="4">
-                                  <MudTextField @bind-Value="_config.TwitchClientId" Label="Client ID" Variant="Variant.Outlined" HelperText="From Twitch Dev Console" />
-                             </MudItem>
-                             <MudItem xs="12" md="4">
-                                  <MudTextField @bind-Value="_config.TwitchClientSecret" Label="Client Secret" Variant="Variant.Outlined" InputType="InputType.Password" />
-                             </MudItem>
-                              <MudItem xs="12" md="4">
-                                  <MudTextField @bind-Value="_config.TwitchRedirectUri" Label="Redirect URI" Variant="Variant.Outlined" HelperText="Must match exactly in Twitch Console (Use HTTP if running in Docker)" />
-                             </MudItem>
-                         </MudGrid>
-                     </MudItem>
-                     
-                     <MudItem xs="12"><MudDivider Class="my-4"/></MudItem>
 
                      <MudItem xs="12">
                          <MudText Typo="Typo.h6">Timer Rules</MudText>
@@ -363,12 +345,11 @@ else
         
         try
         {
-            // Parse the text input
             if (DateTime.TryParseExact(_startTimeText, "yyyy-MM-dd HH:mm", null, System.Globalization.DateTimeStyles.None, out var parsedDate))
             {
                 var offset = TimeZoneInfo.Local.GetUtcOffset(parsedDate);
                 _config.StartTime = new DateTimeOffset(parsedDate, offset);
-                _config.InitialStartTime = _config.StartTime; // Save for reset
+                _config.InitialStartTime = _config.StartTime;
             }
             else
             {
