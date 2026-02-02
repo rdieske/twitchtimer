@@ -34,6 +34,9 @@
     [Parameter]
     public string? UserId { get; set; }
     
+    [SupplyParameterFromQuery(Name = "token")]
+    public string? Token { get; set; }
+    
     private string _timeString = "--:--:--";
     private System.Timers.Timer _timer;
     private ITimerService? _timerService;
@@ -42,8 +45,22 @@
 
     protected override void OnInitialized()
     {
-        // Determine which user's timer to show
-        var targetUserId = UserId ?? UserContext.GetCurrentUserId();
+        string? targetUserId = null;
+        
+        if (!string.IsNullOrEmpty(Token))
+        {
+            targetUserId = UserContext.GetUserIdByToken(Token);
+        }
+        
+        if (string.IsNullOrEmpty(targetUserId))
+        {
+            targetUserId = UserId;
+        }
+        
+        if (string.IsNullOrEmpty(targetUserId))
+        {
+            targetUserId = UserContext.GetCurrentUserId();
+        }
         
         if (string.IsNullOrEmpty(targetUserId))
         {
@@ -53,11 +70,10 @@
         
         _timerService = TimerManager.GetUserTimer(targetUserId);
         
-        // Load user's custom colors
         _backgroundColor = _timerService.Config.BackgroundColor;
         _textColor = _timerService.Config.TextColor;
         
-        _timer = new System.Timers.Timer(100); // Faster update for smooth seconds
+        _timer = new System.Timers.Timer(100); 
         _timer.Elapsed += (s, e) => InvokeAsync(UpdateTimer);
         _timer.Start();
     }

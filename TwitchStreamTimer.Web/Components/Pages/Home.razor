@@ -3,6 +3,7 @@
 @inject IUserContext UserContext
 @inject IJSRuntime JSRuntime
 @inject IDialogService DialogService
+@inject NavigationManager Navigation
 @implements IDisposable
 
 <PageTitle>Stream Timer Dashboard</PageTitle>
@@ -87,6 +88,24 @@ else
                                 
                                 <MudButton Variant="Variant.Text" Color="Color.Default" Class="ml-auto" OnClick="ConfirmReset" StartIcon="@Icons.Material.Filled.Refresh">Reset</MudButton>
                                 <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="ConfirmHardReset" StartIcon="@Icons.Material.Filled.DeleteForever">Hard Reset</MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+
+                    <!-- OBS Overlay Link -->
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="25" Class="pa-4">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">OBS Overlay Link</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudTextField @bind-Value="_overlayUrl" Label="Overlay URL" Variant="Variant.Outlined" ReadOnly="true" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.ContentCopy" OnAdornmentClick="CopyOverlayLink" />
+                                <MudText Typo="Typo.caption" Class="mt-2">Use this URL in OBS Browser Source without login</MudText>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Refresh" OnClick="RegenerateToken">Regenerate Token</MudButton>
                             </MudCardActions>
                         </MudCard>
                     </MudItem>
@@ -238,6 +257,7 @@ else
     private int _bitsCount = 1;
     private MudBlazor.Utilities.MudColor _backgroundColor;
     private MudBlazor.Utilities.MudColor _textColor;
+    private string _overlayUrl = "";
 
     protected override void OnInitialized()
     {
@@ -250,13 +270,13 @@ else
             _timerService = TimerManager.GetUserTimer(userId);
             _config = _timerService.Config;
             
-            // Convert StartTime to text for simple editing
             var localStart = _config.StartTime.ToLocalTime();
             _startTimeText = localStart.ToString("yyyy-MM-dd HH:mm");
             
-            // Load colors
             _backgroundColor = new MudBlazor.Utilities.MudColor(_config.BackgroundColor);
             _textColor = new MudBlazor.Utilities.MudColor(_config.TextColor);
+
+            UpdateOverlayUrl();
 
             _uiTimer = new System.Timers.Timer(1000);
             _uiTimer.Elapsed += (s, e) => InvokeAsync(RefreshUI);
@@ -357,7 +377,6 @@ else
                 return;
             }
             
-            // Save colors
             _config.BackgroundColor = _backgroundColor.ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
             _config.TextColor = _textColor.ToString(MudBlazor.Utilities.MudColorOutputFormats.Hex);
 
@@ -421,6 +440,33 @@ else
         int minutes = ts.Minutes;
         int seconds = ts.Seconds;
         return $"{totalHours:D2}:{minutes:D2}:{seconds:D2}";
+    }
+    
+    private void UpdateOverlayUrl()
+    {
+        var token = UserContext.GetCurrentUserToken();
+        var baseUrl = Navigation.BaseUri.TrimEnd('/');
+        _overlayUrl = $"{baseUrl}/overlay?token={token}";
+    }
+
+    private async Task CopyOverlayLink()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", _overlayUrl);
+            Snackbar.Add("Overlay URL copied to clipboard!", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Failed to copy to clipboard", Severity.Error);
+        }
+    }
+
+    private void RegenerateToken()
+    {
+        UserContext.RegenerateToken();
+        UpdateOverlayUrl();
+        Snackbar.Add("Token regenerated! Old overlay URLs will no longer work.", Severity.Warning);
     }
     
     private async Task Logout()
