@@ -1,0 +1,4 @@
+localhost {
+    tls internal
+    reverse_proxy twitch-timer:8080
+}

@@ -306,10 +306,7 @@ else
         
         try
         {
-            for (int i = 0; i < count; i++)
-            {
-                _timerService.QueueSub($"manual-user-{i}", "ManualAction", tier, false);
-            }
+            _timerService.QueueSub("manual-user", "ManualAction", tier, false, count);
             Snackbar.Add($"Added {count}x Sub Tier {tier}", Severity.Info);
         }
         catch (Exception ex)
@@ -328,10 +325,7 @@ else
         
         try
         {
-            for (int i = 0; i < _bitsCount; i++)
-            {
-                _timerService.QueueBits($"manual-user-{i}", "ManualAction", _manualBits);
-            }
+            _timerService.QueueBits("manual-user", "ManualAction", _manualBits, _bitsCount);
             Snackbar.Add($"Added {_bitsCount}x {_manualBits} Bits", Severity.Info);
         }
         catch (Exception ex)
@@ -374,6 +368,7 @@ else
             {
                 var offset = TimeZoneInfo.Local.GetUtcOffset(parsedDate);
                 _config.StartTime = new DateTimeOffset(parsedDate, offset);
+                _config.InitialStartTime = _config.StartTime; // Save for reset
             }
             else
             {

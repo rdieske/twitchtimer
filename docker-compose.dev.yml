@@ -1,0 +1,38 @@
+services:
+  twitch-timer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    expose:
+      - "8080"
+    volumes:
+      - ./data:/app/Data
+    env_file:
+      - .env.local
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - DataDirectory=Data
+    restart: unless-stopped
+    networks:
+      - dev
+
+  caddy:
+    image: caddy:latest
+    ports:
+      - "8443:443"
+      - "8000:80"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile
+      - caddy_data_dev:/data
+      - caddy_config_dev:/config
+    restart: unless-stopped
+    networks:
+      - dev
+
+networks:
+  dev:
+
+
+volumes:
+  caddy_data_dev:
+  caddy_config_dev:

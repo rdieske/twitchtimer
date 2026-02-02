@@ -17,8 +17,8 @@ public interface ITimerService
     void Stop();
     void Reset();
     void UpdateConfig(TimerConfig newConfig);
-    void QueueSub(string userId, string userDisplay, string tier, bool isGift);
-    void QueueBits(string userId, string userDisplay, int bits);
+    void QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1);
+    void QueueBits(string userId, string userDisplay, int bits, int count = 1);
     void AddManualTime(long seconds, string reason);
     void DeleteEvent(string eventId);
 }
@@ -122,24 +122,25 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
         switch (evt.Type)
         {
             case EventType.Sub:
-                logDesc = $"Sub ({evt.Tier}) by {evt.UserDisplay}";
-                if (evt.Tier == "1000") secondsToAdd = Config.SecondsPerSubTier1;      // Tier 1
-                else if (evt.Tier == "2000") secondsToAdd = Config.SecondsPerSubTier2; // Tier 2
-                else if (evt.Tier == "3000") secondsToAdd = Config.SecondsPerSubTier3; // Tier 3
-                else if (evt.Tier == "Prime") secondsToAdd = Config.SecondsPerPrimeSub;
-                else secondsToAdd = Config.SecondsPerSubTier1; // Default
+                logDesc = evt.Count > 1 ? $"{evt.Count}x Sub ({evt.Tier}) by {evt.UserDisplay}" : $"Sub ({evt.Tier}) by {evt.UserDisplay}";
+                if (evt.Tier == "1000") secondsToAdd = Config.SecondsPerSubTier1 * evt.Count;
+                else if (evt.Tier == "2000") secondsToAdd = Config.SecondsPerSubTier2 * evt.Count;
+                else if (evt.Tier == "3000") secondsToAdd = Config.SecondsPerSubTier3 * evt.Count;
+                else if (evt.Tier == "Prime") secondsToAdd = Config.SecondsPerPrimeSub * evt.Count;
+                else secondsToAdd = Config.SecondsPerSubTier1 * evt.Count;
                 break;
 
             case EventType.GiftSub:
-                logDesc = $"Gift Sub ({evt.Tier}) to {evt.UserDisplay}";
-                if (evt.Tier == "1000") secondsToAdd = Config.SecondsPerSubTier1;
-                else if (evt.Tier == "2000") secondsToAdd = Config.SecondsPerSubTier2;
-                else if (evt.Tier == "3000") secondsToAdd = Config.SecondsPerSubTier3;
+                logDesc = evt.Count > 1 ? $"{evt.Count}x Gift Sub ({evt.Tier}) to {evt.UserDisplay}" : $"Gift Sub ({evt.Tier}) to {evt.UserDisplay}";
+                if (evt.Tier == "1000") secondsToAdd = Config.SecondsPerSubTier1 * evt.Count;
+                else if (evt.Tier == "2000") secondsToAdd = Config.SecondsPerSubTier2 * evt.Count;
+                else if (evt.Tier == "3000") secondsToAdd = Config.SecondsPerSubTier3 * evt.Count;
                 break;
 
             case EventType.Bits:
-                logDesc = $"Cheer {evt.Bits} bits by {evt.UserDisplay}";
-                if (evt.Bits < Config.MinBitsToTrigger) 
+                int totalBits = evt.Bits * evt.Count;
+                logDesc = evt.Count > 1 ? $"{evt.Count}x Cheer {evt.Bits} bits ({totalBits} total) by {evt.UserDisplay}" : $"Cheer {evt.Bits} bits by {evt.UserDisplay}";
+                if (totalBits < Config.MinBitsToTrigger) 
                 {
                     secondsToAdd = 0;
                 }
@@ -147,18 +148,18 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
                 {
                     if (Config.SecondsPerBit > 0)
                     {
-                        secondsToAdd = evt.Bits * Config.SecondsPerBit;
+                        secondsToAdd = totalBits * Config.SecondsPerBit;
                     }
                     else if (Config.SecondsPerBits > 0 && Config.MinBitsToTrigger > 0)
                     {
-                        var factor = evt.Bits / Config.MinBitsToTrigger; 
+                        var factor = totalBits / Config.MinBitsToTrigger; 
                         secondsToAdd = factor * Config.SecondsPerBits;
                     }
                 }
                 break;
 
             case EventType.Manual:
-                logDesc = $"Manual: {evt.Reason}";
+                logDesc = evt.Reason;
                 secondsToAdd = evt.ManualSeconds;
                 break;
         }
@@ -185,29 +186,31 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
 
     // --- Public API ---
 
-    public void QueueSub(string userId, string userDisplay, string tier, bool isGift)
+    public void QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1)
     {
         var evt = new TimerEvent 
         { 
             Type = isGift ? EventType.GiftSub : EventType.Sub, 
             Tier = tier, 
             UserDisplay = userDisplay,
+            Count = count,
             MessageId = $"sub-{userId}-{DateTime.UtcNow.Ticks}"
         };
-        _logger.LogInformation("Queuing Sub event: {Tier} by {User}", tier, userDisplay);
+        _logger.LogInformation("Queuing Sub event: {Count}x {Tier} by {User}", count, tier, userDisplay);
         _eventQueue.Writer.TryWrite(evt);
     }
 
-    public void QueueBits(string userId, string userDisplay, int bits)
+    public void QueueBits(string userId, string userDisplay, int bits, int count = 1)
     {
         var evt = new TimerEvent 
         { 
             Type = EventType.Bits, 
-            Bits = bits, 
+            Bits = bits,
+            Count = count, 
             UserDisplay = userDisplay,
             MessageId = $"bits-{userId}-{DateTime.UtcNow.Ticks}"
         };
-        _logger.LogInformation("Queuing Bits event: {Bits} by {User}", bits, userDisplay);
+        _logger.LogInformation("Queuing Bits event: {Count}x {Bits} bits by {User}", count, bits, userDisplay);
         _eventQueue.Writer.TryWrite(evt);
     }
 
@@ -269,7 +272,8 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
     }
 
     public void Reset() { 
-        Config.StartTime = DateTimeOffset.UtcNow;
+        // Restore the originally configured start time
+        Config.StartTime = Config.InitialStartTime;
         State.TotalAddedSeconds = 0; 
         State.EventLog.Clear(); 
         State.IsStopped = false;
@@ -303,11 +307,21 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
 
     private void SaveDiskState()
     {
+        var dir = Path.GetDirectoryName(_stateFilePath);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
         var json = JsonSerializer.Serialize(State, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(_stateFilePath, json);
     }
     private void SaveConfig()
     {
+        var dir = Path.GetDirectoryName(_configFilePath);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
         var json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(_configFilePath, json);
     }
@@ -324,6 +338,7 @@ public class TimerEvent
     public EventType Type { get; set; }
     public string MessageId { get; set; }
     public string UserDisplay { get; set; }
+    public int Count { get; set; } = 1;
     
     public string Tier { get; set; } 
     public int Bits { get; set; }
