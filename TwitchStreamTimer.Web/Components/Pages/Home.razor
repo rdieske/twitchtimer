@@ -110,34 +110,49 @@ else
                         </MudCard>
                     </MudItem>
 
-                    <!-- Twitch Status -->
+                    <!-- Twitch Connection Manager -->
                     <MudItem xs="12" md="6">
                         <MudCard Elevation="25" Class="pa-4">
                             <MudCardHeader>
                                 <CardHeaderContent>
-                                    <MudText Typo="Typo.h6">Twitch Status</MudText>
+                                    <MudText Typo="Typo.h6">Twitch Connection</MudText>
                                 </CardHeaderContent>
                             </MudCardHeader>
                             <MudCardContent>
-                                @if (TwitchService.IsConnected)
-                                {
-                                     <MudAlert Severity="Severity.Success" Variant="Variant.Filled">Connected</MudAlert>
-                                     <MudText Class="mt-2"><b>User ID:</b> @TwitchService.CurrentUserId</MudText>
-                                }
-                                else
-                                {
-                                     <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">Not Connected</MudAlert>
-                                     <MudText Class="mt-2" Typo="Typo.caption">Reconnect to track Subs/Bits automatically.</MudText>
-                                     <button class="mud-button-root mud-button mud-button-filled mud-button-filled-secondary mud-button-filled-size-large mud-width-full mt-4" 
-                                             onclick="window.openPopup('/auth/start')">
-                                         <span class="mud-button-label">
-                                             <svg class="mud-icon-root mud-svg-icon mud-icon-size-medium mud-button-icon-start" focusable="false" viewBox="0 0 24 24" aria-hidden="true">
-                                                 <path d="M0 0h24v24H0z" fill="none"/><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/>
-                                             </svg>
-                                             Reconnect Twitch
-                                         </span>
-                                     </button>
-                                }
+                                <MudStack Spacing="3">
+                                    <MudSwitch T="bool" @bind-Value="_isSimulationMode" Color="Color.Warning" Label="Simulation Mode (Offline)" />
+                                    
+                                    @if (!_isSimulationMode)
+                                    {
+                                        <MudRadioGroup T="bool" @bind-Value="_monitorOwnChannel">
+                                            <MudRadio Value="true" Color="Color.Primary">Monitor My Channel (@UserContext.GetCurrentUserName())</MudRadio>
+                                            <MudRadio Value="false" Color="Color.Secondary">Monitor Other Channel</MudRadio>
+                                        </MudRadioGroup>
+
+                                        @if (!_monitorOwnChannel)
+                                        {
+                                            <MudTextField @bind-Value="_targetChannel" Label="Target Channel Name" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                                        }
+                                    }
+
+                                    <MudDivider />
+
+                                    @if (TwitchService.IsChatConnected || TwitchService.IsEventSubConnected)
+                                    {
+                                         <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
+                                             Connected to: <b>@(TwitchService.CurrentMonitoredChannel ?? "Unknown")</b>
+                                         </MudAlert>
+                                         <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true" OnClick="DisconnectTwitch">Disconnect</MudButton>
+                                    }
+                                    else
+                                    {
+                                         <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">Disconnected</MudAlert>
+                                         @if (!_isSimulationMode)
+                                         {
+                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" OnClick="ConnectTwitch">Connect</MudButton>
+                                         }
+                                    }
+                                </MudStack>
                             </MudCardContent>
                         </MudCard>
                     </MudItem>
@@ -259,6 +274,57 @@ else
     private MudBlazor.Utilities.MudColor _textColor;
     private string _overlayUrl = "";
 
+    // New Fields for Connection Manager
+    private bool _monitorOwnChannel = true;
+    private string _targetChannel = "";
+    private bool _isSimulationMode = false;
+
+    private async Task ConnectTwitch()
+    {
+        try
+        {
+            var userId = UserContext.GetCurrentUserId();
+            var userName = UserContext.GetCurrentUserName();
+            var accessToken = UserContext.GetTwitchAccessToken();
+            
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                Snackbar.Add("No Access Token found. Please Login again.", Severity.Error);
+                return;
+            }
+
+            // Set session for timer routing
+            TwitchService.ActiveTimerUserId = userId;
+            
+            if (_monitorOwnChannel)
+            {
+                 // Using Chat Client for Own Channel as well for consistency and robustness
+                 await TwitchService.ConnectChat(userName, accessToken, userName);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(_targetChannel)) 
+                {
+                    Snackbar.Add("Please enter a channel name", Severity.Warning);
+                    return;
+                }
+                await TwitchService.ConnectChat(userName, accessToken, _targetChannel);
+            }
+            Snackbar.Add("Connecting...", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Connection Failed: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DisconnectTwitch()
+    {
+        await TwitchService.DisconnectAsync();
+        Snackbar.Add("Disconnected", Severity.Info);
+        StateHasChanged();
+    }
+
     protected override void OnInitialized()
     {
         try
@@ -298,7 +364,7 @@ else
         }
     }
 
-    private void AddManualSubs(string tier, int count)
+    private async Task AddManualSubs(string tier, int count)
     {
         if (_timerService == null)
         {
@@ -308,7 +374,7 @@ else
         
         try
         {
-            _timerService.QueueSub("manual-user", "ManualAction", tier, false, count);
+            await _timerService.QueueSub("manual-user", "ManualAction", tier, false, count);
             Snackbar.Add($"Added {count}x Sub Tier {tier}", Severity.Info);
         }
         catch (Exception ex)
@@ -317,7 +383,7 @@ else
         }
     }
     
-    private void AddManualBits()
+    private async Task AddManualBits()
     {
         if (_timerService == null)
         {
@@ -327,7 +393,7 @@ else
         
         try
         {
-            _timerService.QueueBits("manual-user", "ManualAction", _manualBits, _bitsCount);
+            await _timerService.QueueBits("manual-user", "ManualAction", _manualBits, _bitsCount);
             Snackbar.Add($"Added {_bitsCount}x {_manualBits} Bits", Severity.Info);
         }
         catch (Exception ex)

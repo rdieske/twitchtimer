@@ -13,6 +13,8 @@ public interface IUserContext
     string GetCurrentUserToken();
     string? GetUserIdByToken(string token);
     void RegenerateToken();
+    string? GetTwitchAccessToken();
+    void SetTwitchAccessToken(string token);
 }
 
 public class UserContext : IUserContext
@@ -57,6 +59,16 @@ public class UserContext : IUserContext
     }
 
     public bool IsAuthenticated => !string.IsNullOrEmpty(GetCurrentUserId());
+
+    public string? GetTwitchAccessToken()
+    {
+        return _httpContextAccessor.HttpContext?.Session.GetString("TwitchAccessToken");
+    }
+
+    public void SetTwitchAccessToken(string token)
+    {
+        _httpContextAccessor.HttpContext?.Session.SetString("TwitchAccessToken", token);
+    }
 
     private string GetUserDataPath(string userId)
     {

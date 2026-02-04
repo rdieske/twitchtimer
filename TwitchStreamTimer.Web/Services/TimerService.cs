@@ -6,20 +6,69 @@ namespace TwitchStreamTimer.Web.Services;
 
 public interface ITimerService
 {
-    // Status
+    /// <summary>
+    /// Gets the current remaining time on the timer.
+    /// </summary>
     TimeSpan RemainingTime { get; }
+    
+    /// <summary>
+    /// Gets the current configuration.
+    /// </summary>
     TimerConfig Config { get; }
+    
+    /// <summary>
+    /// Gets the current state (logs, totals, etc.).
+    /// </summary>
     TimerState State { get; }
+    
+    /// <summary>
+    /// Indicates if the timer is currently running (not paused and not stopped).
+    /// </summary>
     bool IsRunning { get; }
 
+    /// <summary>
+    /// Starts or resumes the timer.
+    /// </summary>
     void Start();
+    
+    /// <summary>
+    /// Pauses the timer.
+    /// </summary>
     void Pause();
+    
+    /// <summary>
+    /// Stops the timer completely.
+    /// </summary>
     void Stop();
+    
+    /// <summary>
+    /// Resets the timer to initial state.
+    /// </summary>
     void Reset();
+    
+    /// <summary>
+    /// Updates the timer configuration.
+    /// </summary>
     void UpdateConfig(TimerConfig newConfig);
-    void QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1);
-    void QueueBits(string userId, string userDisplay, int bits, int count = 1);
-    void AddManualTime(long seconds, string reason);
+    
+    /// <summary>
+    /// Queues a subscription event to add time.
+    /// </summary>
+    Task QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1);
+    
+    /// <summary>
+    /// Queues a bits event to add time.
+    /// </summary>
+    Task QueueBits(string userId, string userDisplay, int bits, int count = 1);
+    
+    /// <summary>
+    /// Queues a manual time adjustment.
+    /// </summary>
+    Task AddManualTime(long seconds, string reason);
+    
+    /// <summary>
+    /// Deletes a previously processed event and reverts its time addition.
+    /// </summary>
     void DeleteEvent(string eventId);
 }
 
@@ -30,12 +79,10 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
     private readonly string _stateFilePath;
     private readonly string _configFilePath;
     
-    // State
     public TimerConfig Config { get; private set; } = new();
     public TimerState State { get; private set; } = new();
     private readonly HashSet<string> _processedMessageIds = new(); 
 
-    // Processing Loop
     private readonly Channel<TimerEvent> _eventQueue;
     private readonly System.Timers.Timer _tickTimer;
 
@@ -92,7 +139,20 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+         await RecoverLostEvents();
+         
          _tickTimer.Start();
+         
+         var queueTask = ProcessQueue(stoppingToken);
+         var recoveryTask = RunRecoveryLoop(stoppingToken);
+         
+         await Task.WhenAll(queueTask, recoveryTask);
+         
+         _tickTimer.Stop();
+    }
+
+    private async Task ProcessQueue(CancellationToken stoppingToken)
+    {
          await foreach (var evt in _eventQueue.Reader.ReadAllAsync(stoppingToken))
          {
             try
@@ -105,7 +165,58 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
                 _logger.LogError(ex, "Error processing timer event");
             }
          }
-         _tickTimer.Stop();
+    }
+
+    private async Task RunRecoveryLoop(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+            await RecoverLostEvents();
+        }
+    }
+    
+    private async Task RecoverLostEvents()
+    {
+        var backupFile = Path.Combine("Data", _userId, "emergency_events.jsonl");
+        if (!File.Exists(backupFile)) return;
+
+        _logger.LogWarning("Found emergency backup file. Attempting recovery...");
+        
+        var lines = await File.ReadAllLinesAsync(backupFile);
+        if (lines.Length == 0) return;
+        
+        var recoveredCount = 0;
+        var failedCount = 0;
+
+        foreach (var line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            try 
+            {
+                var evt = JsonSerializer.Deserialize<TimerEvent>(line);
+                if (evt != null)
+                {
+                    await SafeQueueEvent(evt);
+                    recoveredCount++;
+                }
+            }
+            catch 
+            {
+                failedCount++;
+            }
+        }
+        
+        _logger.LogInformation("Recovery: Queued {Count} events. Failed to parse {Failed}. Deleting backup file.", recoveredCount, failedCount);
+        
+        try 
+        {
+            File.Move(backupFile, backupFile + $".recovered.{DateTime.UtcNow.Ticks}.bak");
+        }
+        catch (Exception ex)
+        {
+             _logger.LogError(ex, "Could not rename backup file after recovery");
+        }
     }
 
     private void ProcessEvent(TimerEvent evt)
@@ -184,9 +295,7 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
         }
     }
 
-    // --- Public API ---
-
-    public void QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1)
+    public async Task QueueSub(string userId, string userDisplay, string tier, bool isGift, int count = 1)
     {
         var evt = new TimerEvent 
         { 
@@ -197,10 +306,10 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
             MessageId = $"sub-{userId}-{DateTime.UtcNow.Ticks}"
         };
         _logger.LogInformation("Queuing Sub event: {Count}x {Tier} by {User}", count, tier, userDisplay);
-        _eventQueue.Writer.TryWrite(evt);
+        await SafeQueueEvent(evt);
     }
 
-    public void QueueBits(string userId, string userDisplay, int bits, int count = 1)
+    public async Task QueueBits(string userId, string userDisplay, int bits, int count = 1)
     {
         var evt = new TimerEvent 
         { 
@@ -211,10 +320,10 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
             MessageId = $"bits-{userId}-{DateTime.UtcNow.Ticks}"
         };
         _logger.LogInformation("Queuing Bits event: {Count}x {Bits} bits by {User}", count, bits, userDisplay);
-        _eventQueue.Writer.TryWrite(evt);
+        await SafeQueueEvent(evt);
     }
 
-    public void AddManualTime(long seconds, string reason)
+    public async Task AddManualTime(long seconds, string reason)
     {
         var evt = new TimerEvent 
         { 
@@ -223,7 +332,35 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
             Reason = reason 
         };
         _logger.LogInformation("Queuing Manual event: {Seconds}s - {Reason}", seconds, reason);
-        _eventQueue.Writer.TryWrite(evt);
+        await SafeQueueEvent(evt);
+    }
+
+    private async Task SafeQueueEvent(TimerEvent evt)
+    {
+        try
+        {
+            await _eventQueue.Writer.WriteAsync(evt);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "CRITICAL: Failed to write event to queue! Attempting emergency backup.");
+            await EmergencyBackup(evt);
+        }
+    }
+
+    private async Task EmergencyBackup(TimerEvent evt)
+    {
+        try 
+        {
+             var backupFile = Path.Combine("Data", _userId, "emergency_events.jsonl");
+             var json = JsonSerializer.Serialize(evt);
+             await File.AppendAllTextAsync(backupFile, json + Environment.NewLine);
+             _logger.LogInformation("Emergency backup successful for event {Id}", evt.MessageId);
+        }
+        catch (Exception driveEx)
+        {
+             _logger.LogCritical(driveEx, "CATASTROPHIC FAILURE: Could not write to emergency backup file. Event LOST: {Json}", JsonSerializer.Serialize(evt));
+        }
     }
     
     public void DeleteEvent(string eventId)
@@ -272,7 +409,6 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
     }
 
     public void Reset() { 
-        // Restore the originally configured start time
         Config.StartTime = Config.InitialStartTime;
         State.TotalAddedSeconds = 0; 
         State.EventLog.Clear(); 
@@ -288,8 +424,6 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
         Config = newConfig;
         SaveConfig();
     }
-
-    // --- Persistence ---
 
     private void LoadDiskState()
     {

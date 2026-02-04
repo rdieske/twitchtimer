@@ -37,7 +37,7 @@ public class TwitchAuthController : ControllerBase
         var clientId = _configuration["TWITCH_CLIENT_ID"] ?? throw new InvalidOperationException("TWITCH_CLIENT_ID not configured");
         var redirectUri = _configuration["TWITCH_REDIRECT_URI"] ?? "http://localhost:7283/auth/callback";
         
-        var scope = "channel:read:subscriptions bits:read"; 
+        var scope = "channel:read:subscriptions bits:read chat:read"; 
         
         var url = $"https://id.twitch.tv/oauth2/authorize?client_id={clientId}&redirect_uri={redirectUri}&response_type=code&scope={scope}";
         return Redirect(url);
@@ -85,10 +85,11 @@ public class TwitchAuthController : ControllerBase
 
         // Set user session
         _userContext.SetUser(userId, login);
+        _userContext.SetTwitchAccessToken(accessToken);
         _logger.LogInformation("User {Login} ({UserId}) logged in", login, userId);
 
-        // Connect Service
-        await _twitchService.ConnectAsync(userId, clientId, accessToken);
+        // Connect Service - MOVED TO DASHBOARD (Home.razor) to allow configuration
+        // await _twitchService.ConnectAsync(userId, clientId, accessToken);
 
         return Content($"<h1>Success!</h1><p>Connected as {login}. Window closing...</p><script>if(window.opener){{window.opener.postMessage(\"twitch-auth-success\", \"*\");}} window.close();</script>", "text/html");
     }
