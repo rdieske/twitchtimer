@@ -308,7 +308,21 @@ else
                     Snackbar.Add("Please enter a channel name", Severity.Warning);
                     return;
                 }
-                await TwitchService.ConnectChat(userName, accessToken, _targetChannel);
+                
+                // Sanitize input: Allow Full URLs by extracting the last part
+                var cleanChannel = _targetChannel.Trim();
+                if (cleanChannel.Contains("twitch.tv/", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uriString = cleanChannel;
+                    if (!uriString.StartsWith("http")) uriString = "https://" + uriString;
+                    
+                    if (Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+                    {
+                        cleanChannel = uri.AbsolutePath.Trim('/');
+                    }
+                }
+                
+                await TwitchService.ConnectChat(userName, accessToken, cleanChannel);
             }
             Snackbar.Add("Connecting...", Severity.Info);
         }

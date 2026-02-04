@@ -4,15 +4,13 @@ using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents(options =>
     {
-        options.DetailedErrors = true; // Enable detailed error messages
+        options.DetailedErrors = true; 
     });
 builder.Services.AddControllers();
 
-// Session support for user authentication
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -32,22 +30,20 @@ builder.Services.AddScoped<IUserContext, UserContext>();
 var app = builder.Build(); 
 
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
-app.UseSession(); // Enable session middleware
+app.UseSession();
 
 app.UseAntiforgery();
 
 app.MapStaticAssets();
-app.MapControllers(); // Enable API Controllers
+app.MapControllers(); 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

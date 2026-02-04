@@ -78,6 +78,7 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
     private readonly string _userId;
     private readonly string _stateFilePath;
     private readonly string _configFilePath;
+    private readonly string _eventLogFilePath;
     
     public TimerConfig Config { get; private set; } = new();
     public TimerState State { get; private set; } = new();
@@ -129,6 +130,7 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
         
         _stateFilePath = Path.Combine(dataDir, "timer_state.json");
         _configFilePath = Path.Combine(dataDir, "timer_config.json");
+        _eventLogFilePath = Path.Combine(dataDir, "events.log");
 
         _eventQueue = Channel.CreateUnbounded<TimerEvent>();
         
@@ -292,6 +294,8 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
             if (!string.IsNullOrEmpty(evt.MessageId)) _processedMessageIds.Add(evt.MessageId);
             
             _logger.LogInformation("Added {Sec}s. Reason: {Reason}. Total Added: {Total}", secondsToAdd, logDesc, State.TotalAddedSeconds);
+            
+            LogEventToFile(evt.Type.ToString(), evt.UserDisplay, logDesc, secondsToAdd);
         }
     }
 
@@ -458,6 +462,20 @@ public class TimerService : BackgroundService, ITimerService, IDisposable
         }
         var json = JsonSerializer.Serialize(Config, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(_configFilePath, json);
+    }
+    
+    private void LogEventToFile(string eventType, string userDisplay, string description, long secondsAdded)
+    {
+        try
+        {
+            var timestamp = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            var logLine = $"[{timestamp}] {eventType,-10} | User: {userDisplay,-20} | {description,-50} | +{secondsAdded}s";
+            File.AppendAllText(_eventLogFilePath, logLine + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to write to event log file");
+        }
     }
 
     public override void Dispose()
