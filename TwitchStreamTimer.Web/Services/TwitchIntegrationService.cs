@@ -121,10 +121,10 @@ public class TwitchIntegrationService : IHostedService, IDisposable
             return Task.CompletedTask;
         };
         
-        _chatClient.OnNewSubscriber += async (s, e) => { await ProcessSub(e.Subscriber.DisplayName, "1000", false, 1); };
-        _chatClient.OnReSubscriber += async (s, e) => { await ProcessSub(e.ReSubscriber.DisplayName, "1000", false, 1); };
-        _chatClient.OnGiftedSubscription += async (s, e) => { await ProcessSub(e.GiftedSubscription.DisplayName, "1000", true, 1); };
-        _chatClient.OnCommunitySubscription += async (s, e) => { await ProcessSub(e.GiftedSubscription.DisplayName, "1000", true, e.GiftedSubscription.MsgParamMassGiftCount); };
+        _chatClient.OnNewSubscriber += async (s, e) => { await ProcessSub(e.Subscriber.DisplayName, e.Subscriber.MsgParamSubPlan.ToString(), false, 1); };
+        _chatClient.OnReSubscriber += async (s, e) => { await ProcessSub(e.ReSubscriber.DisplayName, e.ReSubscriber.MsgParamSubPlan.ToString(), false, 1); };
+        _chatClient.OnGiftedSubscription += async (s, e) => { await ProcessSub(e.GiftedSubscription.DisplayName, e.GiftedSubscription.MsgParamSubPlan.ToString(), true, 1); };
+        _chatClient.OnCommunitySubscription += async (s, e) => { await ProcessSub(e.GiftedSubscription.DisplayName, e.GiftedSubscription.MsgParamSubPlan.ToString(), true, e.GiftedSubscription.MsgParamMassGiftCount); };
         
         _chatClient.OnMessageReceived += async (s, e) => 
         {
