@@ -1,0 +1,159 @@
+@page "/admin"
+@inject IUserContext UserContext
+@inject ISessionTracker SessionTracker
+@inject TwitchIntegrationService TwitchService
+@inject ISnackbar Snackbar
+@inject IConfiguration Configuration
+@implements IDisposable
+
+<PageTitle>Admin Dashboard</PageTitle>
+
+@if (!IsAdmin())
+{
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16">
+        <MudPaper Class="pa-8" Elevation="4">
+            <MudStack Spacing="4" AlignItems="AlignItems.Center">
+                <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Error" />
+                <MudText Typo="Typo.h4">Access Denied</MudText>
+                <MudText Typo="Typo.body1" Align="Align.Center">
+                    You do not have permission to access this page.
+                </MudText>
+            </MudStack>
+        </MudPaper>
+    </MudContainer>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudText Typo="Typo.h4">🔧 Admin Dashboard</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="RefreshSessions" StartIcon="@Icons.Material.Filled.Refresh">Refresh</MudButton>
+        </MudStack>
+
+        <MudCard Elevation="4">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Active Sessions (@_sessions.Count)</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_sessions.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info">No active sessions</MudAlert>
+                }
+                else
+                {
+                    <MudTable Items="@_sessions" Dense="true" Hover="true" Striped="true">
+                        <HeaderContent>
+                            <MudTh>User ID</MudTh>
+                            <MudTh>Username</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Connection Type</MudTh>
+                            <MudTh>Monitored Channel</MudTh>
+                            <MudTh>Connected At</MudTh>
+                            <MudTh>Last Activity</MudTh>
+                            <MudTh>Actions</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.UserId</MudTd>
+                            <MudTd><b>@context.Username</b></MudTd>
+                            <MudTd>
+                                @if (context.IsConnected)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small">Connected</MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Default" Size="Size.Small">Disconnected</MudChip>
+                                }
+                            </MudTd>
+                            <MudTd>@context.ConnectionType</MudTd>
+                            <MudTd>@context.MonitoredChannel</MudTd>
+                            <MudTd>@context.ConnectedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss")</MudTd>
+                            <MudTd>@context.LastActivity.ToLocalTime().ToString("HH:mm:ss")</MudTd>
+                            <MudTd>
+                                @if (context.IsConnected)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="@(() => DisconnectSession(context.UserId, context.Username))">Disconnect</MudButton>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudContainer>
+}
+
+@code {
+    private List<SessionInfo> _sessions = new();
+    private System.Timers.Timer _refreshTimer;
+
+    protected override void OnInitialized()
+    {
+        if (IsAdmin())
+        {
+            RefreshSessions();
+            
+            _refreshTimer = new System.Timers.Timer(5000); // Refresh every 5 seconds
+            _refreshTimer.Elapsed += (s, e) => InvokeAsync(() =>
+            {
+                RefreshSessions();
+                StateHasChanged();
+            });
+            _refreshTimer.Start();
+        }
+    }
+
+    private bool IsAdmin()
+    {
+        if (!UserContext.IsAuthenticated) return false;
+        
+        var adminUserId = Configuration["AdminUserId"];
+        if (string.IsNullOrEmpty(adminUserId)) return false;
+        
+        return UserContext.GetCurrentUserId() == adminUserId;
+    }
+
+    private void RefreshSessions()
+    {
+        _sessions = SessionTracker.GetActiveSessions();
+    }
+
+    private async Task DisconnectSession(string userId, string username)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Disconnect User?",
+            $"Are you sure you want to disconnect {username}?",
+            yesText: "Disconnect", cancelText: "Cancel");
+
+        if (result == true)
+        {
+            try
+            {
+                // Remove from session tracker
+                SessionTracker.RemoveSession(userId);
+                
+                // If it's the active timer user, disconnect Twitch
+                if (TwitchService.ActiveTimerUserId == userId)
+                {
+                    await TwitchService.DisconnectAsync();
+                }
+                
+                Snackbar.Add($"Disconnected {username}", Severity.Success);
+                RefreshSessions();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    [Inject] IDialogService DialogService { get; set; }
+
+    public void Dispose()
+    {
+        _refreshTimer?.Dispose();
+    }
+}

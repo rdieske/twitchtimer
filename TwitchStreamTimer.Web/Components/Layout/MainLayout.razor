@@ -5,10 +5,17 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+@inject IUserContext UserContext
+@inject IConfiguration Configuration
+
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
         <MudText Typo="Typo.h5" Class="ml-3">Twitch Stream Timer</MudText>
         <MudSpacer />
+        @if (IsAdmin())
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Inherit" Href="/admin" Title="Admin Dashboard" />
+        }
         <MudIconButton Icon="@Icons.Material.Filled.Tv" Color="Color.Inherit" Href="/overlay" Target="_blank" Title="Open Overlay" />
     </MudAppBar>
 
@@ -25,6 +32,14 @@
             TextPrimary = "#efeff1"
         }
     };
+    
+    private bool IsAdmin()
+    {
+        if (!UserContext.IsAuthenticated) return false;
+        var adminUserId = Configuration["AdminUserId"];
+        if (string.IsNullOrEmpty(adminUserId)) return false;
+        return UserContext.GetCurrentUserId() == adminUserId;
+    }
 }
     <MudMainContent>
         <MudContainer MaxWidth="MaxWidth.Large" Class="my-4">

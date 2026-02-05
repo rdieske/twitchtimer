@@ -159,6 +159,50 @@ else
 
                      <!-- Event Log (Bottom of Dashboard) -->
                     <MudItem xs="12">
+                        <MudText Typo="Typo.h6" Class="mb-2">Event Statistics</MudText>
+                        <MudCard Elevation="4" Class="pa-4 mb-4">
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Sub T1</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">@GetSubCount("1000")</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Sub T2</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">@GetSubCount("2000")</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Sub T3</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">@GetSubCount("3000")</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Prime</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Primary">@GetSubCount("Prime")</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Gifted</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Success">@GetGiftedCount()</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                    <MudItem xs="6" sm="4" md="2">
+                                        <MudStack Spacing="1" AlignItems="AlignItems.Center">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Bits Events</MudText>
+                                            <MudText Typo="Typo.h5" Color="Color.Warning">@GetBitsEventCount()</MudText>
+                                        </MudStack>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                        
                         <MudText Typo="Typo.h6" Class="mb-2">Recent Events</MudText>
                         <MudTable Items="@_timerService.State.EventLog.AsEnumerable().Reverse().Take(20)" Dense="true" Hover="true" Striped="true">
                             <HeaderContent>
@@ -324,6 +368,12 @@ else
                 
                 await TwitchService.ConnectChat(userName, accessToken, cleanChannel);
             }
+            
+            // Register session
+            var connectionType = _isSimulationMode ? "Simulation" : "Chat";
+            var monitoredChannel = _monitorOwnChannel ? userName : _targetChannel;
+            SessionTracker.RegisterSession(userId, userName, connectionType, monitoredChannel);
+            
             Snackbar.Add("Connecting...", Severity.Info);
         }
         catch (Exception ex)
@@ -514,6 +564,81 @@ else
         }
     }
     
+    
+    private int GetSubCount(string tier)
+    {
+        if (_timerService == null) return 0;
+        
+        var events = _timerService.State.EventLog.Where(e => 
+            e.Description.Contains($"Sub ({tier})") && !e.Description.Contains("Gift"));
+        
+        int total = 0;
+        foreach (var evt in events)
+        {
+            // Parse "25458x Sub (1000)" or "Sub (1000)"
+            var desc = evt.Description;
+            if (desc.Contains("x Sub"))
+            {
+                var countStr = desc.Substring(0, desc.IndexOf("x"));
+                if (int.TryParse(countStr, out int count))
+                    total += count;
+            }
+            else
+            {
+                total += 1;
+            }
+        }
+        return total;
+    }
+    
+    private int GetGiftedCount()
+    {
+        if (_timerService == null) return 0;
+        
+        var events = _timerService.State.EventLog.Where(e => e.Description.Contains("Gift Sub"));
+        
+        int total = 0;
+        foreach (var evt in events)
+        {
+            var desc = evt.Description;
+            if (desc.Contains("x Gift Sub"))
+            {
+                var countStr = desc.Substring(0, desc.IndexOf("x"));
+                if (int.TryParse(countStr, out int count))
+                    total += count;
+            }
+            else
+            {
+                total += 1;
+            }
+        }
+        return total;
+    }
+    
+    private int GetBitsEventCount()
+    {
+        if (_timerService == null) return 0;
+        
+        var events = _timerService.State.EventLog.Where(e => e.Description.Contains("Cheer") && e.Description.Contains("bits"));
+        
+        int total = 0;
+        foreach (var evt in events)
+        {
+            var desc = evt.Description;
+            if (desc.Contains("x Cheer"))
+            {
+                var countStr = desc.Substring(0, desc.IndexOf("x"));
+                if (int.TryParse(countStr, out int count))
+                    total += count;
+            }
+            else
+            {
+                total += 1;
+            }
+        }
+        return total;
+    }
+    
     private string FormatTime(TimeSpan ts)
     {
         int totalHours = (int)ts.TotalHours;
@@ -560,6 +685,7 @@ else
 
     [Inject] ISnackbar Snackbar { get; set; }
     [Inject] TwitchIntegrationService TwitchService { get; set; }
+    [Inject] ISessionTracker SessionTracker { get; set; }
 
     public void Dispose()
     {

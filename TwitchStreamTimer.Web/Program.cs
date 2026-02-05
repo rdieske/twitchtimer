@@ -26,6 +26,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<TwitchIntegrationService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TwitchIntegrationService>());
 builder.Services.AddScoped<IUserContext, UserContext>();
+builder.Services.AddSingleton<ISessionTracker, SessionTracker>();
 
 var app = builder.Build(); 
 
